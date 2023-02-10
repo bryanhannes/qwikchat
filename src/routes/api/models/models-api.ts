@@ -4,11 +4,24 @@ export async function getModels(
   const response = await fetch(`http://localhost:5173/api/models`, {
     signal: controller?.signal,
     method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
 
-  if (!response.ok) {
-    return Promise.resolve([]);
+  console.log(response.headers);
+
+  try {
+    console.log(await response.json());
+    // return response.json();
+    return [];
+  } catch (e) {
+    console.log(e);
   }
 
-  return await response.json();
+  return [];
+
+  // const result = await response.json();
+
+  // return result;
 }

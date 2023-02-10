@@ -6,13 +6,12 @@ import {
   useStore,
 } from "@builder.io/qwik";
 import type { DocumentHead } from "@builder.io/qwik-city";
-import type { CreateCompletionResponse } from "openai";
 import { UserIcon } from "~/components/icons/user";
-import { getMessage } from "~/routes/api/chat/chat-api";
 import { getModels } from "~/routes/api/models/models-api";
 import { ChatMessages } from "~/routes/chat-messages";
 import { ChatMessage } from "~/routes/chat-message";
 import { QwikLogo } from "~/components/icons/qwik";
+import { getMessage } from "~/routes/api/chat/chat-api";
 
 export type Message = {
   date: Date;
@@ -24,6 +23,7 @@ type State = {
   model: string;
   prompt: string;
   messages: Message[];
+  message: string;
 };
 
 export default component$(() => {
@@ -31,6 +31,7 @@ export default component$(() => {
     model: "text-davinci-003",
     prompt: "",
     messages: [],
+    message: "",
   });
 
   const modelResource = useResource$<string[] | null>(async ({ cleanup }) => {
@@ -40,44 +41,55 @@ export default component$(() => {
     return getModels(controller);
   });
 
-  const chatResource = useResource$<CreateCompletionResponse | null>(
-    async ({ track, cleanup }) => {
-      track(() => store.prompt);
+  const chatResource = useResource$(async ({ track, cleanup }) => {
+    track(() => store.prompt);
 
-      const controller = new AbortController();
-      cleanup(() => controller.abort());
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
 
-      if (store.prompt === "") {
-        return Promise.resolve(null);
-      }
-
-      const message = await getMessage(store.prompt, store.model, controller);
-
-      if (
-        message &&
-        message.choices &&
-        message.choices[0] &&
-        message.choices[0].text
-      ) {
-        store.messages = [
-          ...store.messages,
-          {
-            date: new Date(),
-            prompt: store.prompt,
-            response: message.choices[0].text,
-          },
-        ];
-      }
-
-      store.messages = store.messages.sort(
-        (a, b) => a.date.getTime() - b.date.getTime()
-      );
-
-      store.prompt = "";
-
-      return message;
+    if (store.prompt === "") {
+      return Promise.resolve(null);
     }
-  );
+
+    const response = await getMessage(store.prompt, store.model, controller);
+
+    // This data is a ReadableStream
+    const data = response.body;
+    if (!data) {
+      return;
+    }
+
+    const reader = data.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      const chunkValue = decoder.decode(value);
+      const prevMessage = store.message;
+      store.message = prevMessage + chunkValue;
+    }
+
+    if (store.message) {
+      store.messages = [
+        ...store.messages,
+        {
+          date: new Date(),
+          prompt: store.prompt,
+          response: store.message,
+        },
+      ];
+    }
+
+    store.messages = store.messages.sort(
+      (a, b) => a.date.getTime() - b.date.getTime()
+    );
+
+    store.prompt = "";
+
+    return response;
+  });
 
   useClientEffect$(() => {
     if (localStorage.getItem("messages")) {
@@ -94,6 +106,7 @@ export default component$(() => {
     <>
       <section class={`flex gap-1 flex-col flex-1 w-full m-auto `}>
         <ChatMessages messages={store.messages} />
+        {store.message}
         <Resource
           value={chatResource}
           onPending={() => (
@@ -109,21 +122,21 @@ export default component$(() => {
                 <div q:slot="icon">
                   <QwikLogo />
                 </div>
-                <div className="animate-pulse carousel-item mt-4 self-center">
-                  <div className="rounded-box bg-white h-4 w-2"></div>
+                <div class="animate-pulse carousel-item mt-4 self-center">
+                  <div class="rounded-box bg-white h-4 w-2"></div>
                 </div>
               </ChatMessage>
             </>
           )}
           onRejected={(error) => <>{error}</>}
-          onResolved={(chat) => <>{chat?.id}</>}
+          onResolved={(chat) => <>{chat}</>}
         />
       </section>
       <section class="flex justify-center py-4">
         <form class={`w-full`}>
           <div class="flex items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700 max-w-screen-xl w-full mx-auto">
             <div class="flex mr-4 w-full">
-              <label for="models" className="sr-only">
+              <label for="models" class="sr-only">
                 Choose a model
               </label>
               <select
@@ -157,7 +170,7 @@ export default component$(() => {
                 />
               </select>
 
-              <label for="chat" className="sr-only">
+              <label for="chat" class="sr-only">
                 What do you want to ask QwikChat?
               </label>
               <textarea

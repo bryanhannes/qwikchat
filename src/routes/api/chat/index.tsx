@@ -1,28 +1,49 @@
-import type { RequestHandler } from "@builder.io/qwik-city";
-import type { CreateCompletionResponse } from "openai";
-import { Configuration, OpenAIApi } from "openai";
+import { getMessageStream } from "~/routes/api/chat/chat-api";
 
-interface ChatRequestBody {
+export interface ChatRequestBody {
   prompt: string;
   model: string | null;
 }
 
-export const onPost: RequestHandler<CreateCompletionResponse> = async ({
-  request,
-}) => {
-  const configuration = new Configuration({
-    apiKey: process.env["OPENAI_API"],
-  });
-  const openai = new OpenAIApi(configuration);
+export const config = {
+  runtime: "edge",
+};
 
-  const chatRequestBody: ChatRequestBody = await request.json();
+export interface OpenAIStreamPayload {
+  model: string;
+  prompt: string;
+  temperature: number;
+  top_p: number;
+  frequency_penalty: number;
+  presence_penalty: number;
+  max_tokens: number;
+  stream: boolean;
+  n: number;
+}
 
-  const response = await openai.createCompletion({
+export const onPost = async (req: Request): Promise<Response> => {
+  const chatRequestBody: ChatRequestBody = await req.json();
+
+  if (!chatRequestBody.prompt) {
+    return new Response("No prompt in the request", { status: 400 });
+  }
+
+  if (!chatRequestBody.model) {
+    return new Response("No model in the request", { status: 400 });
+  }
+
+  const payload: OpenAIStreamPayload = {
     prompt: `You are a genius chatbot named QwikChat. When users asks you something you do your best to answer in a polite and professional way. This is a prompt: ${chatRequestBody.prompt}`,
     model: chatRequestBody.model ? chatRequestBody.model : "text-davinci-003",
     max_tokens: 100,
     temperature: 0.5,
-  });
+    stream: true,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    top_p: 0,
+    n: 1,
+  };
 
-  return response.data;
+  const stream = await getMessageStream(payload);
+  return new Response(stream);
 };
