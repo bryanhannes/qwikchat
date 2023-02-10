@@ -9,19 +9,5 @@ export async function getModels(
     },
   });
 
-  console.log(response.headers);
-
-  try {
-    console.log(await response.json());
-    // return response.json();
-    return [];
-  } catch (e) {
-    console.log(e);
-  }
-
-  return [];
-
-  // const result = await response.json();
-
-  // return result;
+  return await response.json();
 }
