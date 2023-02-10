@@ -28,7 +28,7 @@ type State = {
 
 export default component$(() => {
   const store = useStore<State>({
-    model: "text-davinci-003",
+    model: "",
     prompt: "",
     messages: [],
   });
@@ -109,8 +109,8 @@ export default component$(() => {
                 <div q:slot="icon">
                   <QwikLogo />
                 </div>
-                <div className="animate-pulse carousel-item mt-4 self-center">
-                  <div className="rounded-box bg-white h-4 w-2"></div>
+                <div class="animate-pulse carousel-item mt-4 self-center">
+                  <div class="rounded-box bg-white h-4 w-2"></div>
                 </div>
               </ChatMessage>
             </>
@@ -121,43 +121,41 @@ export default component$(() => {
       </section>
       <section class="flex justify-center py-4">
         <form class={`w-full`}>
-          <div class="flex items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700 max-w-screen-xl w-full mx-auto">
-            <div class="flex mr-4 w-full">
-              <label for="models" className="sr-only">
+          <div class="flex flex-col sm:flex-row items-center p-2 gap-2 rounded-lg bg-gray-50 dark:bg-gray-700 max-w-screen-xl w-full mx-auto">
+            <div class="flex w-full">
+              <label for="models" class="sr-only">
                 Choose a model
               </label>
-              <select
-                onchange$={(e) => {
-                  // @ts-ignore
-                  store.model = e.target.value;
-                }}
-                id="models"
-                name="models"
-                class={
-                  "bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-l-lg border-r-gray-100 dark:border-r-gray-700 border-r-2 focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 w-[240px]"
-                }
-              >
-                <Resource
-                  value={modelResource}
-                  onPending={() => <>Loading</>}
-                  onResolved={(models) => (
-                    <>
+
+              <Resource
+                value={modelResource}
+                onPending={() => <>Loading</>}
+                onResolved={(models) => (
+                  <>
+                    <select
+                      onchange$={(e) => {
+                        // @ts-ignore
+                        store.model = e.target.value;
+                      }}
+                      id="models"
+                      name="models"
+                      class={
+                        "bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-l-lg border-r-gray-100 dark:border-r-gray-700 border-r-2 focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 w-[240px]"
+                      }
+                    >
                       {models &&
                         models.map((model: string) =>
-                          model === store.model ? (
-                            <option value={model} selected>
-                              {model}
-                            </option>
-                          ) : (
+                          <>
                             <option value={model}>{model}</option>
-                          )
-                        )}
-                    </>
-                  )}
-                />
-              </select>
+                          </>
+                        )
+                      }
+                    </select>
+                  </>
+                )}
+              />
 
-              <label for="chat" className="sr-only">
+              <label for="chat" class="sr-only">
                 What do you want to ask QwikChat?
               </label>
               <textarea

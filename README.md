@@ -2,6 +2,10 @@
 
 QwikChat is a demo chatbot application that uses Qwik and OpenAI.
 
+# YouTube
+
+Link to video: https://youtu.be/KOBvVvEe75c
+
 ## Setup
 
 1. Checkout this repository
