@@ -1,6 +1,6 @@
 {
-  "name": "my-qwik-basic-starter",
-  "description": "App with Routing built-in (recommended)",
+  "name": "qwikchat",
+  "description": "QwikChat - The ChatGPT build with Qwik",
   "engines": {
     "node": ">=15.0.0"
   },
@@ -21,8 +21,8 @@
     "qwik": "qwik"
   },
   "devDependencies": {
-    "@builder.io/qwik": "0.17.4",
-    "@builder.io/qwik-city": "0.0.128",
+    "@builder.io/qwik": "^0.100.0",
+    "@builder.io/qwik-city": "^0.100.0",
     "@types/eslint": "8.21.0",
     "@types/node": "^18.11.18",
     "@types/node-fetch": "latest",
@@ -43,6 +43,7 @@
   "dependencies": {
     "@tailwindcss/forms": "^0.5.3",
     "dotenv": "^16.0.3",
-    "openai": "^3.1.0"
+    "eventsource-parser": "^1.0.0",
+    "openai": "^3.2.1"
   }
 }

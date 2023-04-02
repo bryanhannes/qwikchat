@@ -1,10 +1,10 @@
-import type { CreateCompletionResponse } from "openai";
+// import type { CreateCompletionResponse } from "openai";
 
 export async function getMessage(
   prompt: string,
   model: string,
   controller?: AbortController
-): Promise<CreateCompletionResponse> {
+): Promise<ReadableStream<Uint8Array> | null> {
   const response = await fetch(`http://localhost:5173/api/chat`, {
     signal: controller?.signal,
     method: "POST",
@@ -15,8 +15,8 @@ export async function getMessage(
   });
 
   if (!response.ok) {
-    return { choices: [], model: "", object: "", created: 0, id: "" };
+    throw new Error(response.statusText);
   }
 
-  return await response.json();
+  return response.body;
 }

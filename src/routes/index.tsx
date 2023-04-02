@@ -1,18 +1,17 @@
 import {
   component$,
   Resource,
-  useClientEffect$,
   useResource$,
-  useStore,
+  useSignal,
+  useTask$,
+  useVisibleTask$,
 } from "@builder.io/qwik";
 import type { DocumentHead } from "@builder.io/qwik-city";
 import type { CreateCompletionResponse } from "openai";
-import { UserIcon } from "~/components/icons/user";
-import { getMessage } from "~/routes/api/chat/chat-api";
 import { getModels } from "~/routes/api/models/models-api";
 import { ChatMessages } from "~/routes/chat-messages";
-import { ChatMessage } from "~/routes/chat-message";
-import { QwikLogo } from "~/components/icons/qwik";
+import { isServer } from "@builder.io/qwik/build";
+import { SendIcon } from "~/components/icons/send";
 
 export type Message = {
   date: Date;
@@ -20,103 +19,119 @@ export type Message = {
   response: string;
 };
 
-type State = {
-  model: string;
-  prompt: string;
-  messages: Message[];
-};
-
 export default component$(() => {
-  const store = useStore<State>({
-    model: "",
-    prompt: "",
-    messages: [],
-  });
+  const model = useSignal("");
+  const prompt = useSignal("");
+  const messages = useSignal<Message[]>([]);
 
   const modelResource = useResource$<string[] | null>(async ({ cleanup }) => {
     const controller = new AbortController();
     cleanup(() => controller.abort());
 
-    return getModels(controller);
+    return getModels(controller).then((models) => {
+      return [...new Set(models)].sort();
+    });
   });
 
   const chatResource = useResource$<CreateCompletionResponse | null>(
     async ({ track, cleanup }) => {
-      track(() => store.prompt);
+      track(prompt);
 
       const controller = new AbortController();
       cleanup(() => controller.abort());
 
-      if (store.prompt === "") {
+      if (prompt.value === "") {
         return Promise.resolve(null);
       }
 
-      const message = await getMessage(store.prompt, store.model, controller);
+      const response = await fetch(`http://localhost:5173/api/chat`, {
+        signal: controller?.signal,
+        method: "POST",
+        body: JSON.stringify({
+          prompt: prompt.value,
+          model: model.value,
+        }),
+      });
 
-      if (
-        message &&
-        message.choices &&
-        message.choices[0] &&
-        message.choices[0].text
-      ) {
-        store.messages = [
-          ...store.messages,
-          {
-            date: new Date(),
-            prompt: store.prompt,
-            response: message.choices[0].text,
-          },
-        ];
+      // This data is a ReadableStream
+      const data = response.body;
+
+      if (!data) {
+        return;
       }
 
-      store.messages = store.messages.sort(
-        (a, b) => a.date.getTime() - b.date.getTime()
-      );
+      const reader = data.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
 
-      store.prompt = "";
+      messages.value = [
+        ...messages.value,
+        { date: new Date(), prompt: prompt.value, response: "" },
+      ];
 
-      return message;
+      const lastMessageIndex = messages.value.length - 1;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunkValue = decoder.decode(value);
+
+        // update the last message in a immutable way
+        messages.value = messages.value.map((message, index) => {
+          if (index === lastMessageIndex) {
+            return {
+              ...message,
+              response: message.response + chunkValue,
+            };
+          }
+          return message;
+        });
+      }
+
+      prompt.value = "";
+
+      return messages.value[lastMessageIndex].response;
     }
   );
 
-  useClientEffect$(() => {
-    if (localStorage.getItem("messages")) {
-      store.messages = JSON.parse(localStorage.getItem("messages")!);
+  useTask$(({ track }) => {
+    track(model);
+
+    if (isServer) {
+      return; // Server guard
     }
+
+    localStorage.setItem("model", JSON.stringify(model.value));
   });
 
-  useClientEffect$(async ({ track }) => {
-    track(() => store.messages);
-    localStorage.setItem("messages", JSON.stringify(store.messages));
+  useTask$(({ track }) => {
+    track(messages);
+
+    if (isServer) {
+      return; // Server guard
+    }
+
+    localStorage.setItem("messages", JSON.stringify(messages.value));
+  });
+
+  useVisibleTask$(() => {
+    // Save history of messages between browser refresh
+    if (localStorage.getItem("model")) {
+      model.value = JSON.parse(localStorage.getItem("model") || "");
+    }
+    if (localStorage.getItem("messages")) {
+      messages.value = JSON.parse(localStorage.getItem("messages") || "");
+    }
   });
 
   return (
     <>
       <section class={`flex gap-1 flex-col flex-1 w-full m-auto `}>
-        <ChatMessages messages={store.messages} />
+        <ChatMessages messages={messages.value} />
         <Resource
           value={chatResource}
-          onPending={() => (
-            <>
-              <ChatMessage>
-                <div q:slot="icon">
-                  <UserIcon />
-                </div>
-                {store.prompt}
-              </ChatMessage>
-
-              <ChatMessage>
-                <div q:slot="icon">
-                  <QwikLogo />
-                </div>
-                <div class="animate-pulse carousel-item mt-4 self-center">
-                  <div class="rounded-box bg-white h-4 w-2"></div>
-                </div>
-              </ChatMessage>
-            </>
-          )}
           onRejected={(error) => <>{error}</>}
-          onResolved={(chat) => <>{chat?.id}</>}
+          onResolved={(chat) => <>{chat}</>}
         />
       </section>
       <section class="flex justify-center py-4">
@@ -135,8 +150,9 @@ export default component$(() => {
                     <select
                       onchange$={(e) => {
                         // @ts-ignore
-                        store.model = e.target.value;
+                        model.value = e.target.value;
                       }}
+                      value={model.value}
                       id="models"
                       name="models"
                       class={
@@ -144,12 +160,11 @@ export default component$(() => {
                       }
                     >
                       {models &&
-                        models.map((model: string) =>
-                          <>
-                            <option value={model}>{model}</option>
-                          </>
-                        )
-                      }
+                        models.map((model: string) => (
+                          <option value={model} key={model}>
+                            {model}
+                          </option>
+                        ))}
                     </select>
                   </>
                 )}
@@ -164,21 +179,27 @@ export default component$(() => {
                 rows={1}
                 class="block p-2.5 w-full text-sm text-gray-900 bg-white rounded-r-lg border border-gray-300 focus:ring-blue-500 border-r-2 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
                 placeholder="What do you want to ask QwikChat?"
-                onkeypress$={(event: KeyboardEvent) => {
-                  if (event.key === "Enter") {
-                    const textarea = document.getElementById(
-                      "prompt"
-                    ) as HTMLTextAreaElement;
-                    store.prompt = textarea.value;
-                    textarea.value = "";
-                  }
-                }}
+                value={prompt.value}
               ></textarea>
             </div>
             <button
+              onclick$={() => {
+                const textarea = document.getElementById(
+                  "prompt"
+                ) as HTMLTextAreaElement;
+                prompt.value = textarea.value;
+                textarea.value = "";
+              }}
+              type="button"
+              class="p-2 text-red-900 bg-red-200 hover:bg-red-400 inline-flex flex-row gap-2 rounded-lg cursor-pointer"
+            >
+              <SendIcon></SendIcon>
+              Send
+            </button>
+            <button
               onClick$={() => {
-                store.prompt = "";
-                store.messages = [];
+                prompt.value = "";
+                messages.value = [];
               }}
               type="button"
               class="p-2 text-red-900 bg-red-200 hover:bg-red-400 inline-flex flex-row gap-2 rounded-lg cursor-pointer"
